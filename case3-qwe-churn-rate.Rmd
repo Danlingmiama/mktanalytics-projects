@@ -1,0 +1,216 @@
+---
+title: "Case3 QWEchurn Danling Ma and Xuyuan Zhang"
+author: "DanlingMa_XuyuanZhang"
+date: "10/30/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+setwd("~/Desktop/Marketing Analytics/Case 3")
+
+library(tidyverse)
+library(rmarkdown)
+library(readxl)
+library(RColorBrewer)
+
+remove(list = ls())
+```
+#Introduction 
+In this project, Richard Wall was trying to estimate the probability that a given customer would leave in the near future and identify the drivers that contributed most to that customer’s decision so that they would be able to reach out to the customer, enhance his or her experience with QWE services, and divert churn without giving up costly discounts. In particular, he wanted to know the relationships between churning and customer longevity in months, CHI score, number of support cases, average support priority, and usage information (logins, blogs, views, and days since last login). 
+
+In order to analysing the relationships between them, his associates V. J. Aggrawal pulled data on both the value of a characteristic as of December 1, 2011, and its change from November to December and added a column indicating whether the customer actually left in the two months following December 1. The final dataset includes such variables as `ID`, `Customer Age (in months)`, `Churn (1 = Yes, 0 = No)`, `CHI Score Month 0`, `CHI Score 0-1`, `Support Cases Month 0`, `Support Cases 0-1`, `SP Month 0`, `SP 0-1`, `Logins 0-1`, `Blog Articles 0-1`, `Views 0-1`, `Days Since Last Login 0-1`.
+
+Here is one thing to note, to simplified the problem, Aggrawal only pulled data for two months. Therefore, the regressions below may not be as precise as the regressions based on a longer period.
+
+#Data Description & Cleaning
+    
+```{r}
+df_qwe = as.data.frame(read_excel('UV6696-XLS-ENG.xlsx', sheet = 2))
+str(df_qwe)
+summary(df_qwe)
+```
+    
+In the dataset, we note that -
+    
+  1. Month 0 is to denote the current moment in time.
+    
+  2. 0-1 is the change from November to December. Negative values denote a decrease and vice versa.
+    
+  3. Churn is to show whether a customer call with a request to cancel his or her contract.
+    
+  4. Support cases is using when any customer uses our system and may has some issues at times. These requests will be routed to the tech people.
+    
+  5. Support priority shows how serious the issue/request is. And the more service requests, the higher the priority, the more serious issues will be.
+    
+  6. Usage includes logins, blog articles, views and days since last login. It shows whether a user is active. The higher the usege, the less likely to churn there will be.
+    
+```{r}
+df_qwe$ID = as.factor(df_qwe$ID)
+df_qwe$`Churn (1 = Yes, 0 = No)` = as.factor(df_qwe$`Churn (1 = Yes, 0 = No)`)
+str(df_qwe)
+```
+    
+In the dataset, we have 13 variables as seen above. Here, we note that -
+    
+  1. "ID" and "Churn (1 = Yes, 0 = No)" are discrete variables.
+    
+  2. "Customer Age (in months)", "CHI Score Month 0", "CHI Score 0-1", "Support Cases Month 0", "Support Cases 0-1", "SP Month 0", "SP 0-1", "Logins 0-1", "Blog Articles 0-1", "Views 0-1" and "Days Since Last Login 0-1" are continuous variables.
+
+
+#Visualizations
+```{r}
+p1 <- df_qwe %>%
+  ggplot(aes(x = `CHI Score Month 0`)) +
+  geom_histogram(aes(y=..density..), binwidth = 50, colour="black", fill="white") + 
+  geom_density(alpha=.2, fill="Orange") +
+  facet_grid(.~`Churn (1 = Yes, 0 = No)`) +
+  labs(  #add title and anotations
+      title = 'Distribution of CHI score for December 2011 by different churn outcomes', tag = '3.a)', x = 'CHI score', y = 'Frequency',       caption = "'O' stands for customers who didn't churn.
+      '1' stands for customers who churn"
+      ) +
+  theme(  #formating font and size
+      plot.title = element_text(size=20, face="bold"),
+      axis.title.x = element_text(size=12, face="bold"),
+      axis.title.y = element_text(size=12, face="bold")
+      )
+p2 <- df_qwe %>%  
+  group_by(`Customer Age (in months)`) %>% 
+  summarise(`Average Churn Rate` = mean(`Churn (1 = Yes, 0 = No)` == 1)) %>%
+  ggplot(aes(x = `Customer Age (in months)`, y = `Average Churn Rate`, fill = `Average Churn Rate`)) +
+  geom_col(color = 'black') +
+  scale_fill_gradient(low="orange", high="red") +
+  labs(  #add title and anotations
+      title = 'Average churn rate by customer age', tag = '3.b)', x = 'Customer Age (in months)', y = 'Churn Rate' ) +
+  theme(  #formating font and size
+      plot.title = element_text(size=20, face="bold"),
+      axis.title.x = element_text(size=12, face="bold"),
+      axis.title.y = element_text(size=12, face="bold")
+      )
+p3 <- df_qwe %>%
+  filter(`Churn (1 = Yes, 0 = No)` == 1) %>%
+  ggplot() +
+  geom_bar(aes(`Customer Age (in months)`, fill = ..count..), color = 'black') +
+  scale_fill_gradient(low="orange", high="red") +
+  labs(  #add title and anotations
+      title = 'Number of customers who churn \nby customer age', tag = '3.c)', x = 'Customer Age (in months)', y = 'Number of churned customers' ) +
+  theme(  #formating font and size
+      plot.title = element_text(size=20, face="bold"),
+      axis.title.x = element_text(size=12, face="bold"),
+      axis.title.y = element_text(size=12, face="bold")
+      )
+```
+
+```{r echo = FALSE}
+p1
+p2
+p3
+```
+
+  We can see from the plot that the distribution of CHI score is right-skewed and the right plot(churn=1) is more right-skewed than the left plot(churn=0). For customers who did not churn out(Churn=0), the mean of them lies between 0-150, while for customers who churned out, the mean of them lies between 0-100. Therefore, on average, customers who churned out usually have a lower CHI score than those who did not churn out.
+
+  Next, we compare the average churn rate by different customer age. From figure 3.b), there is no signicicant trend between customer age. Customer who have been using with the QWE for around 12 to 18 months, 27 months, 41 months and 47 months are more likely to churn compared with the rest of the customers. 
+
+  And when we compare the number of customers who churn by customer age, we can find that customer staying for 12 months churn the most.
+
+  Therefore, combining these two figures, we can say that even though the average churn rate is fairly high for customers who stay for more than 24 months, the total number of churned customer is not rather high. And for customers who stay for 12 months, they have both the high average churn rate and the high number of churned customers.
+
+#Statistical Analyses 
+
+```{r}
+df_churn0 <- df_qwe %>% filter(`Churn (1 = Yes, 0 = No)` == 0) 
+df_churn1 <- df_qwe %>% filter(`Churn (1 = Yes, 0 = No)` == 1)
+
+tests <- list()
+tests[[1]] <- t.test(df_churn0$`Customer Age (in months)`, df_churn1$`Customer Age (in months)`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[2]] <- t.test(df_churn0$`CHI Score Month 0`, df_churn1$`CHI Score Month 0`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[3]] <- t.test(df_churn0$`CHI Score 0-1`, df_churn1$`CHI Score 0-1`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[4]] <- t.test(df_churn0$`Support Cases Month 0` , df_churn1$`Support Cases Month 0` , paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[5]] <- t.test(df_churn0$`Support Cases 0-1` , df_churn1$`Support Cases 0-1`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[6]] <- t.test(df_churn0$`SP Month 0` , df_churn1$`SP Month 0`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[7]] <- t.test(df_churn0$`SP 0-1` , df_churn1$`SP 0-1`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[8]] <- t.test(df_churn0$`Logins 0-1`, df_churn1$`Logins 0-1`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[9]] <- t.test(df_churn0$`Blog Articles 0-1`, df_churn1$`Blog Articles 0-1`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[10]] <- t.test(df_churn0$`Views 0-1`, df_churn1$`Views 0-1`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+tests[[11]] <- t.test(df_churn0$`Days Since Last Login 0-1`, df_churn1$`Days Since Last Login 0-1`, paired = FALSE, alternative = "two.sided", var.equal = FALSE)
+
+Variables =  c("Customer Age (in months)", "CHI Score Month 0", "CHI Score 0-1","Support Cases Month 0","Support Cases 0-1","SP Month 0","SP 0-1","Logins 0-1","Blog Articles 0-1","Views 0-1","Days Since Last Login 0-1")
+
+x <- t(sapply(tests, function(x) {
+     c(
+       round(x$estimate[2], 5),
+       round(x$estimate[1], 5),
+       p.value = round(x$p.value, 5))
+}))
+
+colnames(x) <- c('Mean of churned customers', 'Mean of un-churned customers', 'p-value')
+rownames(x) <- Variables
+knitr::kable(as.table(x), caption = "Statistic tests summary")
+```
+
+  Each of the t-test we did here is a two-sample t-test(Independent Samples t-Test).
+
+  For each of the test, our null hypothesis is that the means of a certain variable for customers who churned out and who did not are equal, so our alternatives is that the means are significantly different. That is:
+H0: mean(churn=0) - mean(churn=1) = 0
+HA: mean(churn=0) - mean(churn=1) ≠ 0
+
+  Means are significantly different at 95% confidence level if the p.value for the test is less than 0.05 (when we should reject the null hypothesis). For all the tests we did above, we found that in `Customer Age (in months)`, `CHI Score Month 0`, `CHI Score 0-1`, `Support Cases Month 0`, `SP Month 0`, `Logins 0-1`, `Blog Articles 0-1` and `Days Since Last Login 0-1` the p-value are less than 0.05, indicating that the means of the two groups are significantly different. In other words, these variables have a siginificant influence on the possibility of churnning.
+  Therefore, for the management team, they should especially focus on all these variables mentioned above and try to find out the relationship between churn and each of the variables, so that they can maintain more customers.
+
+#Logistic Regressions
+
+```{r}
+reg_5 = glm(df_qwe$`Churn (1 = Yes, 0 = No)` ~ `Customer Age (in months)` + `CHI Score Month 0` + `CHI Score 0-1` + `Support Cases Month 0` + `Support Cases 0-1` + `SP Month 0` + `SP 0-1` + `Logins 0-1` + `Blog Articles 0-1` + `Views 0-1` + `Days Since Last Login 0-1`, data = df_qwe, family = binomial)
+summary(reg_5)
+```
+
+  From the regression above, we can identify the factors of customers churning out of QWE Inc. Here, we note that `CHI Score Month 0`, `CHI Score 0-1` as well as `Days Since Last Login 0-1` and `intercept` are siginificant at 99.9% level. `Customer Age (in months)` and `Views 0-1` are siginificant at 99% and 95% level. `Support Cases 0-1` is marginally significant. All of them are siginificantly affecting customer churn. 
+  
+  To be specific, with a customer staying for one more month, the relative odds of churning versus not churning will increase 1.28%. And with one unit increase in `Support Cases 0-1`, the relative odds of churning versus not churning will increase 18.6%, holding other constant. With one more `Days since last login 0-1`, the relative odds of churning versus not churning will increase 1.74%, holding other constant. Since these factors increase the posibility of churning out, Aggarwal and Wall should be dedicated to decrease the support cases by improving the quality of survice and increase the activity of users. Besides, the longer the customer stay, the more likely they are to churn. This might because customers' need couldn't be meet in long term so the attraction of QWE vanishs by time.
+  
+  For other factors, with one score higher in CHI in December will decrease the relative odds of churning by 0.46%, holding other constant. With one unit decrease in `CHI Score 0-1`, the relative odds of churning will decrease by 1.02%, holding other constant. And with one unit increase in `Views 0-1`, the relative odds of churning will decrease by 0.01%, holding other constant. Therefore, Aggarwal and Wall should give more attention on improving customer's happiness and elevate the viewing times.
+  
+  The relative odds of churning when all other regressors equal to zero is 6.3%.
+
+#Customer Segmentation 
+
+```{r}
+df_qwe$`Age Segments` = ifelse(df_qwe$`Customer Age (in months)` >= 13, 'Old',
+                     ifelse(df_qwe$`Customer Age (in months)` <= 6, 'New', 'Medium'))
+
+df_new <- df_qwe %>% filter(`Age Segments` == "New")
+df_medium <- df_qwe %>% filter(`Age Segments` == "Medium")
+df_old <- df_qwe %>% filter(`Age Segments` == "Old")
+
+churn_new <- glm(`Churn (1 = Yes, 0 = No)` ~ `Customer Age (in months)`+`CHI Score Month 0`+`CHI Score 0-1`+`Support Cases Month 0`+`Support Cases 0-1`+`SP Month 0`+`SP 0-1`+`Logins 0-1`+`Blog Articles 0-1`+`Views 0-1`+`Days Since Last Login 0-1`, data=df_new, family=binomial)
+churn_medium <- glm(`Churn (1 = Yes, 0 = No)` ~ `Customer Age (in months)`+`CHI Score Month 0`+`CHI Score 0-1`+`Support Cases Month 0`+`Support Cases 0-1`+`SP Month 0`+`SP 0-1`+`Logins 0-1`+`Blog Articles 0-1`+`Views 0-1`+`Days Since Last Login 0-1`, data=df_medium, family=binomial)
+churn_old <- glm(`Churn (1 = Yes, 0 = No)` ~ `Customer Age (in months)`+`CHI Score Month 0`+`CHI Score 0-1`+`Support Cases Month 0`+`Support Cases 0-1`+`SP Month 0`+`SP 0-1`+`Logins 0-1`+`Blog Articles 0-1`+`Views 0-1`+`Days Since Last Login 0-1`, data=df_old, family=binomial)
+
+summary(churn_new)
+summary(churn_medium)
+summary(churn_old)
+```
+
+**For new customers:**
+  The coefficient of intercept, `Customer Age (in months)`, `CHI Score 0-1`, `Support Cases 0-1`, `SP Month 0`, `Logins 0-1` and `Days Since Last Login 0-1` are significant.
+The log odds of churn is -5.390e+00 when all the regressors are equal to zero.
+The log odds of churn would decrease by 1.910e-02 if `CHI Score 0-1` increases by one unit.
+Holding other constant, the log odds of churn would increase by 3.883e-01 if `Customer Age (in months)` increases by one unit; The log odds of churn would increase by 2.467e-01 if `Support Cases 0-1` increases by one unit; The log odds of churn would increase by 3.607e-01 if `SP Month 0` increases by one unit; The log odds of churn would increase by 7.239e-03 if `Logins 0-1` increases by one unit; The log odds of churn would increase by 3.552e-02 if `Days Since Last Login 0-1` increases by one unit.
+
+**For medium customers:**
+  The coefficient of intercept, `Customer Age (in months)`, `CHI Score Month 0`, `Views 0-1`, and `Days Since Last Login 0-1` are significant.
+The log odds of churn is -4.819e+00 when all the regressors are equal to zero.
+Holding other constant, the log odds of churn would decrease by 9.842e-03 if `CHI Score Month 0` increases by one unit; the log odds of churn would decrease by 1.332e-04 if `Views 0-1` increases by one unit.
+Holding other constant, the log odds of churn would increase by 3.187e-01 if `Customer Age (in months)` increases by one unit; The log odds of churn would increase by 1.468e-02 if `Days Since Last Login 0-1` increases by one unit.
+
+**For old customers:**
+  The coefficient of intercept, `Customer Age (in months)` and `CHI Score Month 0` are significant.
+Holding other constant, the log odds of churn is -7.271e-01 when all the regressors are equal to zero.
+Holding other constant, the log odds of churn would decrease by 3.984e-02 if `Customer Age (in months)` increases by one unit; the log odds of churn would decrease by 1.146e-02 if `CHI Score Month 0` increases by one unit. `CHI Score Month 0` is significant for medium and old custoemrs, but is not significant for new custoemrs.  `Logins 0-1`, `CHI Score 0-1` ,`Support Cases 0-1` and `SP Month 0` are significant for new custoemrs, but is not significant for medium and old customers. `Views 0-1` is significant for medium customers, but is not significant for new and old customers. `Days Since Last Login 0-1` is significant for new and medium customers, and is not significant for old customers.`Customer Age (in months)` consistently affect all the variables.
+
+`Customer Age (in months)` consistently affect all the variables. The magnitudes does not vary significantly in new customers and medium customers segments(3.883e-01 v.s. 3.187e-01), but do vary significantly with the old customers segment(-3.984e-02).
+
+#Final Reflections
+
+  In this assignment, we looked at the possibility of churn at QWE in respect to 11 variables. First we found customers with high CHI scores are less likely to churn out and customers who stays with the company for about more 10 months are more likely to churn out. We then did statistical analysis for each of the variables, finding out that the means of `Customer Age (in months)`, `CHI Score Month 0`, `CHI Score 0-1`, `Support Cases Month 0`, `SP Month 0`, `Logins 0-1`, `Blog Articles 0-1` and `Days Since Last Login 0-1`  are significantly different for customers who churned out and who did not. To further look into the issue, we divide customers into three segments based on customer ages and did logistical regression on the 11 variables. Interestingly, for new customers and medium customers segments, the possibility of churn increases as customer age increases, while for old customers, the possibility of churn decreases as customer age increases.
