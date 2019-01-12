@@ -1,0 +1,316 @@
+---
+title: "Case1 PilgrimBank   DanlingMa and XuyuanZhang"
+author: "DanlingMa_XuyuanZhang"
+date: "9/30/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+# Set working directory
+setwd("~/Desktop/Marketing Analytics/Case 1")
+#knitr::opts_knit$set(root.dir = getwd())
+# Load packages HERE
+library(tidyverse)
+library(rmarkdown)
+library(readxl)
+
+# Clear enviroment before starting 
+remove(list = ls())
+```
+
+#--- 1) Introduction:---
+##After reading the case, briefly describe Alan Green’s objectives of looking at customer profitability at Pilgrim Bank (200-300 words). (5 Points)
+
+    In the case, what Alan Green was trying to do was to find out whether customers who use online banking are more profitable than those who do not, so that the management team can make better decisions about whether they should charge fees for use of the online banking channel or if they should offer incentives to encourage greater use of the channel.
+
+    The profitability of customers is not only determined by the balance in their accounts, but also other factors such as Interest from Loans and Cost to serve. Basically, the cost of using online banking is far less than that of using traditional channels such as bank branches and ATM machines. That’s why banks always encourage customers to use their online systems.
+
+    By comparing the profitability of the two groups (customers who use online banking and who do not) in the sample as well as doing t-test to see if the difference in means is meaningful, Green would be able to identify the more profitable group and therefore provide specific service to that group in order to improve the profit of the bank.
+
+#--- 2) ---
+##a. Read in the “Data” page from the Pilgrim Bank Excel file into R. How many columns and rows are there in your data frame? (5 Points)
+- There are 11 columns(variables) and 31634 rows(observations) in the pbdata.
+```{r}
+# Loading in 'data' sheet using 'sheet = 2'
+pbdata = as.data.frame(read_excel('608715-XLS-ENG.xls', sheet = 2))
+str(pbdata)
+```
+
+
+##b. Select the columns relating to customers’ 1999 variable. (5 Points)
+```{r}
+# Select 1999 data
+pbdata_99 = select(pbdata, starts_with('I'), starts_with('9'))
+#rename variables
+names(pbdata_99) = c("ID", "Profit","Online", "Age", "Inc", "Tenure", "District", "Billpay")
+```
+
+
+#--- 3) Data Description & Cleaning: (25 Points) ---
+##a. Describe the variables in your dataset via a summary()or str()command. In particular, state the “conceptual” measure types for each variable.
+ID: Nominal
+
+Profit: Ratio
+  
+Online: Nonimal
+  
+Age: Ordinal
+  
+Inc: Ordinal
+  
+Tenure: Ratio
+  
+District: Nominal
+  
+Billpay: Nominal
+```{r}
+# Data type
+str(pbdata_99)
+```
+
+##b. There are missing values in customers’ age and income groups. Create a separate category in each of these variables that stands for missing age/income group information.
+```{r, results="hide"}
+addNA(pbdata_99$`Age`, ifany = TRUE)
+addNA(pbdata_99$`Inc`, ifany = TRUE)
+```
+
+##c. If any of the variables are saved as the “wrong” data type in R, convert them to the “right” data type.
+```{r}
+pbdata_99$`Online` = as.factor(pbdata_99$`Online` )
+pbdata_99$`Age` = factor(pbdata_99$`Age`, levels = c(1,2,3,4,5,6,7))
+pbdata_99$`Inc` = factor(pbdata_99$`Inc`, levels = c(1,2,3,4,5,6,7,8,9))
+pbdata_99$`Billpay` = as.factor(pbdata_99$`Billpay`)
+pbdata_99$`ID` = as.factor(pbdata_99$`ID`)  #已改，原本为int，错。
+pbdata_99$`District` = as.factor(pbdata_99$`District`)
+str(pbdata_99)
+```
+
+##d. Customers can be enrolled in online banking and electronic billpay facilities. Analyze the different combinations of subscriptions in these two services via a two-way frequency table.
+```{r}
+frequency_table = table(pbdata_99$`Online`, pbdata_99$`Billpay`)
+colnames(frequency_table) = c('Not Electronic Billpay', 'Electronic billpay')
+rownames(frequency_table) = c('Offline', 'Online')
+frequency_table
+```
+
+##e. Create a new variable subscription_grp based on their subscriptions in online banking and electronic billpay. How many groups are there? Describe these groups briefly based on the results from part (d) above.
+
+- **As we can see from the variable `category`, even though we have 4 levels, there are actually 3 groups:**
+
+Combined with d), 
+the total profit of customers who were offline without electronic billpay is 27780 (9 times of that of customers who are online without electronic billpay, 52 times of that of customers who are online with billpay.); 
+that of customers who use online banking without electronic billpay is 3326; 
+the number of customers who use online banking with electronic billpay is 528; 
+and there is no customers who were offline with use electronic billpay since the electronic billpay is only for customers who use online banking.
+```{r}
+pbdata_99$subscription_grp <- 
+  ifelse((pbdata_99$Online == "0") & (pbdata_99$Billpay == "0"), '00',
+  ifelse((pbdata_99$Online == "0") & (pbdata_99$Billpay == "1"), '01',
+  ifelse((pbdata_99$Online == "1") & (pbdata_99$Billpay == "0"), '10',
+  '11')))
+pbdata_99$subscription_grp = factor(pbdata_99$subscription_grp, 
+                                       levels = c('00', '01', '10', '11'),
+                                       labels = c('Offline_NObillpay', 'Offline_Billpay',
+                                                  'Online_NObillpay', 'Online_Billpay'))
+category <- unique(pbdata_99$subscription_grp)
+category
+```
+
+#--- 4) Visualizations: ---
+**We want to understand how customer profitability varies with customer demographics. For this analysis -**
+
+##a. Show the distribution of profitability for customers’ income groups, age groups and districts. (10 Points)
+```{r}
+#distribution of profitability for customers’ income groups
+pbdata_99 %>%
+  group_by(Inc)  %>%
+  summarise(totalprofit = sum(Profit)) %>%
+  ggplot(aes(x = Inc, y = totalprofit, fill = Inc)) +
+  geom_col() + 
+  scale_fill_brewer(palette = "OrRd") + 
+  labs(  #add title and anotations
+      title = 'Profitability for Customers’ Income Groups', tag = '4.a-1)', x = 'Income Groups', y = 'Profitability',       caption = "*Income buckets are as follows:
+      1 = less than $15,000; 2 = $15,000-$19,999; 3 = $20,000-$29,999; 
+      4 = $30,000-$39,999; 5 = $40,000-$49,999; 6 = $50,000-$74,999; 
+      7 = $75,000-$99,999; 8 = $100,000-$124,999; 9 = $125,000 and more.'
+      **Source from 'Data' of Pilgrim Bank in 608715-XLS-ENG.xlsx, HBR"
+      ) +
+  theme(  #formating font and size
+      plot.title = element_text(size=20, face="bold"),
+      axis.title.x = element_text(size=12, face="bold"),
+      axis.title.y = element_text(size=12, face="bold")
+      )
+```
+
+- From 4.c-1), the group 6, 7 and 9 are leading segments compared with others, which means customers in this three groups, whose income ranging from $50,000 to $99,999 and from $125,000 to more, brings profit the most. 
+
+```{r}
+#distribution of profitability for customers’ age groups
+pbdata_99 %>%
+  group_by(Age)  %>%
+  summarise(totalprofit = sum(Profit)) %>%
+  ggplot(aes(x = Age, y = totalprofit, fill = Age)) +
+  geom_col() + 
+  scale_fill_brewer(palette = "PuRd") +
+  labs(  #add title and anotations
+      title = 'Profitability for Customers’ Age Groups', tag = '4.a-2)', x = 'Age Groups', y = 'Profitability',       caption = "*Age buckets are as follows: 
+      1 = less than 15 years; 2 = 15-24 years; 3 = 25-34 years; 
+      4 = 35-44 years; 5 = 45-54 years; 6 = 55-64 years; 7 = 65 years and older.'
+      **Source from 'Data' of Pilgrim Bank in 608715-XLS-ENG.xlsx, HBR"
+      ) +
+  theme(  #formating font and size
+      plot.title = element_text(size=20, face="bold"),
+      axis.title.x = element_text(size=12, face="bold"),
+      axis.title.y = element_text(size=12, face="bold")
+      )
+```
+
+- From grahp 4.a-2), customers with age ranging from 25-44 drives profit the most. And customers with age less than 24 contributes to profit the least, it might be due to the income.
+
+```{r}
+#distribution of profitability for customers’ district groups
+  pbdata_99 %>%
+  group_by(District)  %>%
+  summarise(totalprofit = sum(Profit)) %>%
+  ggplot(aes(x = District, y = totalprofit, fill = District)) +
+  geom_col()  + 
+  labs(  #add title and anotations
+      title = 'Profitability for Customers’ District Groups', tag = '4.a-3)', x = 'District Groups', y = 'Profitability',       caption = "*The three geographic regions are designated 1100, 1200, and 1300.
+      **Source from 'Data' of Pilgrim Bank in 608715-XLS-ENG.xlsx, HBR"
+      ) +
+  theme(  #formating font and size
+      plot.title = element_text(size=20, face="bold"),
+      axis.title.x = element_text(size=12, face="bold"),
+      axis.title.y = element_text(size=12, face="bold")
+      )
+```
+
+- From 4.c-3), District 1200 has a significant high profit. District 1200 might be a wealthy area.
+
+##b. Show the relationship between profitability and tenure (5 Points)
+```{r}
+ggplot(pbdata_99, aes(x = Tenure, y = Profit)) +
+  geom_point(shape = 1, alpha = 0.4) +
+  geom_smooth(method = lm) + 
+  labs(  #add title and anotations
+      title = 'Relationship between profitability and tenure', tag = '4.b)', x = 'Tenure', y = 'Profit',       caption = "**Source from 'Data' of Pilgrim Bank in 608715-XLS-ENG.xlsx, HBR"
+      ) +
+  theme(  #formating font and size
+      plot.title = element_text(size=20, face="bold"),
+      axis.title.x = element_text(size=12, face="bold"),
+      axis.title.y = element_text(size=12, face="bold")
+      )
+```
+
+- From the scatter plot, there is slight positive relationship between the profit and tenure, the longer the tenure the higher the profit. But the profit is not significantly sensitive to the tenure period.
+
+##c. Show the distribution of profitability for different values of subscription_grp (5 Points)
+```{r}
+pbdata_99 %>%
+  group_by(subscription_grp) %>%
+  summarise(totalprofit_grp = sum(Profit)) %>%
+  ggplot(aes(x = subscription_grp, y = totalprofit_grp, fill = subscription_grp)) + 
+  geom_col() + 
+  labs(  #add title and anotations
+      title = 'Profitability for Different Subscription Groups', tag = '4.c)', x = 'Subscription Group', y = 'Profitability',       caption = "*Subscription Groups: 
+customers who were offline without electronic billpay,
+customers who use online banking without electronic billpay,
+customers who use online banking with electronic billpay.
+
+      **Source from 'Data' of Pilgrim Bank in 608715-XLS-ENG.xlsx, HBR"
+      ) +
+  theme(  #formating font and size
+      plot.title = element_text(size=20, face="bold"),
+      axis.title.x = element_text(size=12, face="bold"),
+      axis.title.y = element_text(size=12, face="bold")
+      )
+```
+
+- From 4.c), the total profit from customers who were offline is the most since customers are used to traditional way, more of them use offline banking service, which contributes to its profound totle profit. While that of the Online customers (no matter with electronical billpay or not) is far lower than the offline group.
+
+##What do these visualizations tell you about the distribution of customer profitability? What segment(s) should Pilgrim focus on? (5 Points)
+
+**Pilgrim should focus on customers: **
+  
+  - with high income (whose income ranges from $50,000 to $99,999 and from $125,000 to more);
+  
+  - who have ability to earn money, i.e. older than 24;
+  
+  - who live in wealthy area (District 1200);
+
+Beside, Pilgrim should also aim at increasing the retention rate. And due to the large market size in traditional offline market, Pilgrim should also focus on the offline market segment more compared with others.
+
+
+#--- 5) Statistical Analyses: ---
+**We want to understand whether the differences in profitability based on their subscription_grp values are statistically significant. For this analysis, compare the mean customer profitability for each pair of values in subscription_grp. (20 Points)**
+
+- We use the 'Independent Samples t-Test', since we have the same variable `Profit`, three pari of sub-samples of data. 
+1. H0: μ"00" = μ"10"; HA: μ"00" ≠ μ"10"
+2. H0: μ"00" = μ"11"; HA: μ"00" ≠ μ"11"
+3. H0: μ"10" = μ"11"; HA: μ"10" ≠ μ"11"
+```{r}
+df_00 = pbdata_99 %>% filter(subscription_grp == 'Offline_NObillpay') %>% select(Profit)
+df_10 = pbdata_99 %>% filter(subscription_grp == 'Online_NObillpay') %>% select(Profit)
+df_11 = pbdata_99 %>% filter(subscription_grp == 'Online_Billpay') %>% select(Profit)
+#test1
+t.test(df_00, df_10, paired = FALSE)
+```
+
+- From Test 1, the P-value is larger than 0.05, so we should fail to reject the Null hypothesis at 95% level. Therefore, there is no significant difference between the mean of profit of the two groups (customers who were offline without billpay, customers who use online banking without billpay).
+
+- From the perspective of economy, the mean of x or y tells that the *'profitability per person'* of the former group(`df_00`) is relatively the same with that of the other one(`df_10`).
+
+- And the graph 4.c) shows the total profit of the offline market(`df_00`) is greatly larger than that of the 'customers who use online banking without billpay'(`df_10`). 
+
+- That said, people from online banking or not nearly have the same *'profitability per person'*, it is not the online banking service that drives the profit up.
+
+```{r}
+#test2
+t.test(df_00, df_11, paired = FALSE)
+```
+
+- From Test 2, the P-value is less than 0.05, so we reject the Null hypothesis at 95% level. Therefore, there is a significant difference between the mean of profit of the two groups (customers who were offline without billpay, customers who use online banking with billpay). 
+
+- From the perspective of economy, the mean of the former group(`df_00`) is less than the later(`df_11`), which means the *'profitability per person'* of 'Online_Billpay' group is higher.
+
+- However, the Graph 4.c shows that the total profit of 'customers who were offline without billpay'(`df_00`) is greatly larger than 'customers who use online banking with billpay'(`df_11`).
+
+- That said, even though the *'total profitability'* of customers who were offline (`df_00`) is higher than the other, there are wide margins to be found in the 'Online_Billpay' market according to the *'profitability per person'*.
+
+```{r}
+#test3
+t.test(df_10, df_11, paired = FALSE)
+```
+
+- From Test 3, the P-value is less than 0.05, so we reject the Null hypothesis at 95% level. Therefore, there is a significant difference between the mean of profit of the two groups.
+
+- From the perspective of economy, the mean of the former group(`df_10`) is much less than the later(`df_11`), which means the *'profitability per person'* of the later group(`df_11`) is much higher($195 vs $104).
+
+- In Graph 4.c), the total profit of 'customers who were offline and don't use billpay'(`df_10`) is about 3 times larger than that of 'customers who use online banking with billpay'(`df_11`).
+
+- That said, the *'profitability per person'* of 'customers who use online banking with billpay'(`df_11`) is much higher than that of the other(`df_10`).
+
+Therefore, compared between the two Online groups, it might be the *'electronic billpay service'* that drives online profit actually. Therefore, Pilgrim Bank shouldn't blindly focuse on online market in general, instead, they should focuse on improving the electronic service.
+
+#--- 6) Final Reflections: ---
+**When you have completed the assignment, please reflect on some of the longer-lasting lessons of this experience. Most students/teams will gain key insights about Pilgrim Bank and about customer profitability patterns in general. Write a thoughtful paragraph describing the team’s one most noteworthy and valuable discovery or insight. Please be specific. (5 Points)**
+
+    Generally, traditional channels are more costly than electronical channels such as ATM and Online banking systems. Therefore, Pilgrim Bank should attempt to encourage customers to migrate their transactions from high cost channels to lower ones. 
+    It seems like online banking service would generate more profit, however, based on the test results, it's actually the electronic billpay service of online banking system drives up the profit. Thus, to answer the question came up with by Green's boss, Pilgrim Bank are supposed to offer incentives such as rebates and lower service charges to ecourage greater use of the online channel. 
+    According to the artical, at Pilgrim Bank, 10% of customers generated 70% of the profit. So Pilgrim Bank should improve their customer relationship management, focusing on specific group to maximum their profit. 
+    On the one hand, they could keep increasing retention of a bank’s best customers:
+      - 'Tiered service' strategy:
+          - Offer discounts on mortgage rates
+          - Offer higher interest rates on certificates of deposit
+          - Route their telephone calls to specially trained personnel in the call center
+          - Offer fee-waivers and rate-breaks
+    On the other hand, they could attract new customers from lower profit tiers (offline) to higer profit tier (online):
+      - Analyse customers' behavior to break down the market. For example, to elderly customers who are not familier with the online products, Pilgrim should hold events to get them familier with the interface of online system 
+      - Improve the system convience by setting up a technical team to build a user-friendly interface to increase transaction volumn.
+      - Forcasting behavior to create lifetime-profitability tiers by a model linking current customer characteristics to the probability of retention as well as to future revenues and costs.
+      - Adopt cross-sell programs combining offline products with online products.
+    But there is one thing to be clarified that this relationship is derived from the statistical test, it's only a correlationship rather than a casuality since there are still other factors this dataset doesn't include.
