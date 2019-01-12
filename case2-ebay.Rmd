@@ -1,0 +1,118 @@
+---
+title: "Case3-eBay-DanlingMa_XuyuanZhang"
+author: "DanlingMa_XuyuanZhang"
+date: "10/24/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+remove(list = ls())
+setwd("~/Desktop/Marketing Analytics/Case 2")
+
+library(tidyverse) 
+if(!require(lmtest)) install.packages("lmtest", repos = "http://cran.us.r-project.org")
+  library(lmtest)
+```
+
+# --- a) ---
+Load the dataset in R and create a new column called ‘rDate’ convert the ‘date’ column into the ‘date’ datatype. 5%
+```{r}
+eb_df <- read.csv("eBayData.csv")
+eb_df$date = paste(eb_df$date)
+eb_df = mutate(eb_df, rDate = as.Date(date, "%m/%d/%Y"))
+eb_df$isTreatmentGroup = factor(eb_df$isTreatmentGroup)
+eb_df$isTreatmentPeriod = factor(eb_df$isTreatmentPeriod)
+eb_df$dma = factor(eb_df$dma)
+```
+
+
+# --- b) ---
+Determine the date that started the treatment period. That is, write code to determine the earliest date in the treatment period. How were the treatment and control groups treated differently during this period? 5%
+```{r}
+treatment = eb_df %>% filter(isTreatmentGroup == 1)
+control = eb_df %>% filter(isTreatmentGroup == 0)
+
+tr_date = min(filter(treatment, isTreatmentPeriod == 1)$rDate)
+tr_date
+```
+
+    The treatment starts at May 22th, 2012. During this period, the DMAs in the treatment group were no longer shown search ads from eBay, while the DMAs in the control group would be continuously shown such ads. By constructing these two groups, researchers would be able to figure out the effect of search ads on revenues.
+
+# --- c) ---
+The data contains a control group, which are shown search ads throughout the data, and a treatment group, which are only shown search ads before the treatment period.  
+
+## i. 
+Run a regression that compares log(revenue) of the treatment group in the pre-treatment period and in the treatment period.  5%
+
+```{r}
+reg_1 = lm(log(treatment$revenue) ~ treatment$isTreatmentPeriod)
+summary(reg_1)
+```
+
+## ii. 
+What do the resulting coefficient estimates say about the effectiveness of advertising?  Be as specific as you can.  10%
+
+    The intercept is 10.94865, which is the log(revenue) of treatment group during pre-treatment period. And the log(revenue) of treatment group during post-treatment period is 10.90925(10.94865-0.03940). The difference of log(revenue) for treatment group in pre-treatment period and post-treatment period is -0.03940. The p-value(0.0474) is less than 0.05, which tells the coefficient is statistically significant at 5% level.
+    Therefore, advertising do have effect on revenue. The revenue would decrease by 3.94% if customers are no longer shown search ads from eBay.
+
+
+# --- d) ---
+Now we will use the control group for a true experimental approach.  First, we will check the randomization was done properly. 
+
+## i. 
+Run a regression that compares log(revenue) of the treatment group and the control group in the pre-treatment period.  10%
+```{r}
+pre_treatment = eb_df %>% filter(isTreatmentPeriod == 0)
+reg_2 = lm(log(pre_treatment$revenue) ~ pre_treatment$isTreatmentGroup)
+summary(reg_2)
+```
+
+
+## ii. 
+What is the purpose of this randomization check? What do the results of this regression show? 5% 
+
+    The purpose of this randomization check is to make sure the two groups are exactly the same during the pre-treatment period, so that after the experiment we can conclude that any effect on the revenue is due to the exposure to ads (the only difference between the two groups)
+    The p-value of the coefficient is larger than 0.05, which is not statistically significant at 5% level. That is to say, there is no difference between the treatment group and control group during pre-treatment period.
+
+
+# --- e) ---
+Now, using the post treatment data, determine the effectiveness of eBay ads.
+
+## i.
+Run a regression with log(revenue) as the dependent variable, and whether the DMA is in the treatment group as the independent variable.  10%
+```{r}
+af_treatment = eb_df %>% filter(isTreatmentPeriod == 1)
+reg_3 = lm(log(af_treatment$revenue) ~ af_treatment$isTreatmentGroup)
+summary(reg_3)
+```
+
+## ii. 
+What do the resulting coefficient estimates say about the effectiveness of advertising? Be as specific as you can. 10%
+
+    The log(revenue) of control group during treatment period is 10.916740. The log(revenue) of treatment group during treatment period is 10.90925(10.916740-0.007494). The difference of log(revenue) between control group and treatment group during treatment period is 0.007494. The revenue would decrease by 0.75% if no search ads are shown to customers(treatment group). The p-value(0.741) is larger than 0.05, so we fail to reject the null that the coefficient is equal to zero. That is to say, whether people are in the treatment group or not does not affect the revenue of the company. Therefore, we can conclude that advertising does not have effects on revenue.
+
+## iii. *
+What was the purpose of the control group here?  What factor was unaccounted for in part c, but was accounted for in part e? 10%
+
+    The control group here is used to compare with the treatment group. Since the only difference, when start doing experiment, is the exposure to advertising, any difference in revenue between the two groups during post-treatment period must be due to advertising.
+    In part c, we did not check whether the treatment group is exposed to the same environment during the two periods(pre-treatment & post-treatment). Perhaps during the post-treatment period, there are other factors (e.g. economic environment) contribute to the revenue, which mislead us to conclude that the exposure to advertising do have effects on revenue. Therefore, even though the revenue in post-treatment period is significantly higher than that in pre-treatment period, we cannot conclude that advertising has effects on revenue.
+    In part e, however, the pre-conditions are considered in part d before conducting the experiment. We checked the two groups are exactly the same before conducting the experiment, so any difference in revenue between the two groups during post-treatment period must be due to advertising.
+
+## iv. 
+Does this R-squared of this regression affect the interpretation or confidence in the estimate of the effectiveness of advertising?  10%
+
+    Yes.
+    The R-squared of the regression, 8.422e-06, indicates that the regressor *isTreatmentGroup* only explains 0.00084% of the variance of the dependent variable *log(revenue)*. Therefore, *isTreatmentGroup* explains some of the variation in log(revenue), but much variation remains unaccounted for. So even though the coefficient of the dependent variable is insignificant, we couldn’t make an absolute conclusion based on this regression model. We need to add more control variables to improve this model so that we can get a more unbiased and consistent coefficient.
+
+# --- f) ---
+Throughout the analysis regression were run on log(revenue) rather than revenue.  Was this the right choice? Or would simply using revenue be more appropriate?  Justify your answer. 5%
+
+    Yes. 
+    Because by using log(revenue), we can derive a percentage change of the revenue, which is comparable with the past revenue and even other company, rather than an absolute value, which is less comparable and meaningless . For example, if we use revenue, we just know there is a $5-billion-dollars-increase in the revenue but we couldn’t know whether it is a huge or small change in relative. 
+
+# --- g) ---
+From the above analyses, summarize your findings about the effectiveness of advertising. Do you think internet advertising is effective in improving sales? 5%
+
+    Based on the regression above, we suppose that the effect of advertising for eBay is not significant and effective in improving sales. However, there is also a deficiency in these regression models since there are lots of omitted variables such as holidays and events effects (leading revenue up) or economic recession (driving revenue down) and etc. Without holding these omitted factors constant, these regressions are largely biased without a precise and consistent estimation. Therefore, we could fix this situation by inserting other omitted factors and even some interaction terms and quadratic/cubic terms.
+    In general, the effect of internet advertising depends on many aspects. For example, whether the target strategy is proper, whether the company focus on the right segments, or whether the advertising reminds customers of competitors’ brands, generating a negative effect.
